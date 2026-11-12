@@ -1,0 +1,62 @@
+services:
+  database:
+    image: postgis/postgis:16-3.4
+    container_name: calendriersp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-calendriersp}
+      POSTGRES_USER: ${POSTGRES_USER:-calendriersp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-calendriersp_dev}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${DATABASE_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      MOBILE_WEB_ORIGINS: ${MOBILE_WEB_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081}
+      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      GEOCODER_URL: ${GEOCODER_URL:-https://data.geopf.fr/geocodage/search}
+      BAN_URL: ${BAN_URL:-https://adresse.data.gouv.fr/data/ban/adresses/latest/csv}
+      BAN_DEPARTMENTS_URL: ${BAN_DEPARTMENTS_URL:-https://contours-administratifs.s3.rbx.io.cloud.ovh.net/latest/geojson/departements-100m.geojson}
+      APP_SECRET: ${APP_SECRET:-calendriersp_local_dev_change_me}
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-calendriersp}:${POSTGRES_PASSWORD:-calendriersp_dev}@database:5432/${POSTGRES_DB:-calendriersp}?serverVersion=16&charset=utf8"
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}:80"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1/health') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend-web:
+    build:
+      context: ./frontend-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND_ADDRESS:-${BIND_ADDRESS:-127.0.0.1}}:${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:

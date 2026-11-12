@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "CalendrierSP",
+    "slug": "calendriersp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true },
+    "android": { "package": "fr.calendriersp.mobile" }
+  }
+}

@@ -1,0 +1,12 @@
+.env
+.env.local
+.env.*.local
+vendor/
+node_modules/
+.expo/
+dist/
+build/
+backend/var/
+*.tsbuildinfo
+*.log
+.DS_Store

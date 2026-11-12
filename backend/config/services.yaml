@@ -1,0 +1,33 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  App\:
+    resource: '../src/'
+    exclude:
+      - '../src/Entity/'
+      - '../src/Enum/'
+      - '../src/Kernel.php'
+
+  App\Geo\OpenStreetMap:
+    arguments:
+      $overpassUrl: '%env(OVERPASS_URL)%'
+
+  App\EventSubscriber\MobileCorsSubscriber:
+    arguments:
+      $allowedOrigins: '%env(MOBILE_WEB_ORIGINS)%'
+
+  App\Geo\AddressGeocoder:
+    arguments:
+      $geocoderUrl: '%env(GEOCODER_URL)%'
+      $cacheDir: '%kernel.cache_dir%/address-geocoding'
+
+  App\Geo\CachedDownload:
+    arguments:
+      $cacheDir: '%kernel.cache_dir%/address-downloads'
+
+  App\Geo\BaseAdresseNationale:
+    arguments:
+      $banUrl: '%env(BAN_URL)%'
+      $departmentsUrl: '%env(BAN_DEPARTMENTS_URL)%'

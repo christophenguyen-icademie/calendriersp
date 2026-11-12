@@ -1,0 +1,59 @@
+name: calendriersp-tests
+
+services:
+  database:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: calendriersp_test
+      POSTGRES_USER: calendriersp_test
+      POSTGRES_PASSWORD: test_only_password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U calendriersp_test -d calendriersp_test']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  frontend-web:
+    build: ./frontend-web
+    ports:
+      - '127.0.0.1:18081:80'
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, --quiet, --spider, 'http://127.0.0.1/']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  backend:
+    build: ./backend
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: '0'
+      MOBILE_WEB_ORIGINS: 'http://127.0.0.1:18082,http://localhost:8081,http://localhost:8083,http://127.0.0.1:8083'
+      APP_SECRET: isolated_test_secret
+      OVERPASS_URL: 'http://address-source:8090/overpass'
+      GEOCODER_URL: 'http://address-source:8090/search'
+      BAN_URL: 'http://address-source:8090/ban'
+      BAN_DEPARTMENTS_URL: 'http://address-source:8090/departments'
+      DATABASE_URL: 'postgresql://calendriersp_test:test_only_password@database:5432/calendriersp_test?serverVersion=16&charset=utf8'
+    ports:
+      - '127.0.0.1:18080:80'
+    depends_on:
+      database:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - >-
+        su -s /bin/sh www-data -c 'php bin/console doctrine:migrations:migrate --no-interaction && php tests/seed.php > /tmp/test-accounts.json';
+        exec apache2-foreground
+    healthcheck:
+      test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1/health') === false ? 1 : 0);"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  address-source:
+    build: ./backend
+    command: [php, -S, '0.0.0.0:8090', 'tests/fixtures/address_source.php']

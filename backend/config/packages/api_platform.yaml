@@ -1,0 +1,9 @@
+api_platform:
+  title: CalendrierSP API
+  version: 0.1.0
+  formats:
+    jsonld: ['application/ld+json']
+    json: ['application/json']
+  defaults:
+    pagination_enabled: true
+    pagination_items_per_page: 30

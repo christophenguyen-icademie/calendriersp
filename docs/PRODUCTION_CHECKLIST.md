@@ -1,0 +1,26 @@
+# Checklist avant mise en production
+
+- [x] Initialiser le projet Symfony et verrouiller les dépendances PHP et web.
+- [x] Ajouter la migration initiale, les contraintes d’unicité et les index métier.
+- [x] Implémenter les routes web Symfony avec réponses JSON explicites et validation des entrées.
+- [x] Filtrer les requêtes métier par amicale et vérifier les rôles et les affectations.
+- [x] Implémenter l’authentification web par session, cookies HttpOnly et jetons CSRF.
+- [x] Valider côté serveur les quantités, montants et moyens de paiement, sans calculs monétaires flottants.
+- [x] Raccorder tous les modules du web aux données persistantes de l’API.
+- [x] Gérer les carnets et reçus numérotés par tournée, leur consommation unique et les agrégats par carnet.
+- [x] Ajouter CB, les couleurs des résultats, les filtres et tris des passages, les compléments de logement et la création d’appartements avec reçu indépendant.
+- [x] Ajouter les suppressions contrôlées, le détail des dépendances, la protection des données validées et des reçus utilisés, et les campagnes persistantes.
+- [x] Définir les secteurs par polygone Leaflet, valider avec PostGIS et importer les adresses BAN ou OpenStreetMap avec aperçu et déduplication.
+- [ ] Dimensionner les sources cartographiques pour la charge prévue ; partager cache et limitation du géocodeur officiel si plusieurs instances backend sont déployées.
+- [x] Tester les routes HTTP : persistance, permissions, isolation des amicales, validation et clôture.
+- [ ] Ajouter limitation de débit des connexions, réinitialisation/changement de mot de passe et gestion du cycle de vie des comptes.
+- [x] Intégrer le module dans l’onglet Calendriers de MobileSP et raccorder authentification par session/CSRF, lectures et écritures à l’API.
+- [ ] Vérifier les cookies de session, leur reprise et la connexion HTTPS sur appareils Android et iOS réels.
+- [ ] Définir les règles de clôture, correction et réouverture de tournée.
+- [ ] Implémenter endpoint de synchronisation idempotent et journal des mutations.
+- [x] Vérifier dans Chrome la connexion, la création de données, la saisie, la persistance après rechargement et la validation.
+- [ ] Compléter avec tests de concurrence, charge et synchronisation mobile.
+- [ ] Configurer sauvegardes PostgreSQL, restauration testée, supervision et logs.
+- [ ] HTTPS, secrets hors dépôt, CORS strict, politique de mots de passe.
+- [ ] Définir responsable de traitement, sous-traitants, durées de conservation, information des personnes et procédure d'exercice des droits RGPD.
+- [ ] Vérifier les obligations CNIL et faire valider les documents juridiques adaptés à l'organisation réelle.
