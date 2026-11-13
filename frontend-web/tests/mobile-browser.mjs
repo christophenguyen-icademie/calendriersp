@@ -99,7 +99,7 @@ try {
   })()`);
   };
   const clickAddress = async (action, line) => {
-    const prefix = `${action}${action === 'Ajouter un appartement' ? '' : ' le passage'} · ${line}`;
+    const prefix = `${action}${action.startsWith('Ajouter ') ? '' : ' le passage'} · ${line}`;
     await wait(`[...document.querySelectorAll('[role=button]')].some(e => e.getAttribute('aria-label')?.startsWith(${JSON.stringify(prefix)}) && e.getAttribute('aria-disabled') !== 'true')`);
     await evaluate(`[...document.querySelectorAll('[role=button]')].find(e => e.getAttribute('aria-label')?.startsWith(${JSON.stringify(prefix)})).click()`);
   };
@@ -285,7 +285,7 @@ try {
   await api(`/tournees/${tour.id}/statut`, 'PATCH', { statut: 'TERMINEE' }); await api(`/tournees/${tour.id}/valider`, 'POST', {});
   await click('Actualiser'); await wait("document.body.innerText.includes('Tournée validée : consultation uniquement.')");
   await counter(6, 4, 2);
-  assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Nouvelle adresse' || e.getAttribute('aria-label')?.startsWith('Ajouter un appartement'))"), false);
+  assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Nouvelle adresse' || /^(Ajouter un appartement|Ajouter un numéro)/.test(e.getAttribute('aria-label') || ''))"), false);
   const screenshot = await command('Page.captureScreenshot', { format: 'png' });
   await writeFile('/tmp/mobilesp-calendriers-connected.png', Buffer.from(screenshot.data, 'base64'));
   await click('Déconnexion'); await wait("!!document.querySelector('[aria-label=\"Mot de passe\"]')");
@@ -303,14 +303,35 @@ try {
   await counter(0, 0, 0, 0);
   await wait("document.body.innerText.includes('Stock à renseigner')");
   assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Ajouter un carnet')"), false);
-  await createAddress('30 rue du Sapeur', 'Absent');
-  assert((await api(`/tournees/${workerTour.id}`)).listeAdresses.some(a => a.ligne1 === '30 rue du Sapeur' && a.passage.statut === 'ABSENT'));
+  await clickAddress('Ajouter un numéro dans la même rue', source.ligne1);
+  await wait("!!document.querySelector('[aria-label=Numéro]')");
+  assert.equal(await evaluate("document.querySelector('[aria-label=Numéro]').value"), '');
+  assert.equal(await evaluate("document.body.innerText.includes('Rue : Rue Traversière')"), true);
+  assert.equal(await evaluate("document.querySelector('[aria-label=\"Code postal\"]').value"), '10000');
+  assert.equal(await evaluate("document.querySelector('[aria-label=Ville]').value"), 'Troyes');
+  for (const field of ['Bâtiment', 'Étage', 'Appartement', 'Porte']) assert.equal(await evaluate(`document.querySelector('[aria-label=${JSON.stringify(field)}]').value`), '');
+  await fill('Numéro', '30 bis'); await select('Résultat du passage', 'Absent');
+  await click('Enregistrer le passage'); await saved();
+  let newDetail = await api(`/tournees/${workerTour.id}`);
+  const newAddress = newDetail.listeAdresses.find(a => a.ligne1 === '30 bis Rue Traversière');
+  assert(newAddress && newAddress.id !== source.id && newAddress.passage.statut === 'ABSENT');
+  for (const field of ['batiment', 'etage', 'appartement', 'porte']) assert.equal(newAddress[field], null);
+  assert.equal(newDetail.listeAdresses.find(a => a.id === source.id).ligne1, source.ligne1);
+  await clickAddress('Ajouter un numéro dans la même rue', source.ligne1);
+  await fill('Numéro', '30 bis'); await select('Résultat du passage', 'Absent');
+  await click('Enregistrer le passage');
+  await wait("!!document.querySelector('[role=alert]')");
+  assert.equal(await evaluate("document.querySelector('[aria-label=Numéro]').value"), '30 bis');
+  await fill('Numéro', '30 ter'); await click('Enregistrer le passage'); await saved();
+  newDetail = await api(`/tournees/${workerTour.id}`);
+  assert(newDetail.listeAdresses.some(a => a.ligne1 === '30 ter Rue Traversière' && a.passage.statut === 'ABSENT'));
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true);
   await click('Déconnexion'); await wait("!!document.querySelector('[aria-label=\"Mot de passe\"]')");
   await login(accounts.A);
   assert.equal(await evaluate(`document.body.innerText.includes(${JSON.stringify(workerTour.nom)})`), false);
   await click('Déconnexion');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('OK: MobileSP actual web export, opt-in credential storage after successful login, masked restoration on reload, immediate opt-out and forgetting, cookie/CSRF session, sold/donated/stock counters with corrections and zero stock, server tours, receipts, filters, conflicts, offline preservation, locking, worker permissions and tenant isolation.');
+  console.log('OK: MobileSP actual web export, opt-in credential storage after successful login, masked restoration on reload, immediate opt-out and forgetting, cookie/CSRF session, sold/donated/stock counters with corrections and zero stock, server tours, same-street numbers with duplicate rejection and source preservation, receipts, filters, conflicts, offline preservation, locking, worker permissions and tenant isolation.');
 } finally {
   socket?.close(); chrome.kill('SIGTERM'); server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));

@@ -389,6 +389,7 @@ try {
   await wait("document.body.innerText.includes('Les saisies sont verrouillées')");
   assert.equal(await evaluate("!!document.querySelector('.team-options')"), false);
   assert.equal(await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent === 'Modifier').disabled"), true);
+  assert.equal(await evaluate("[...document.querySelectorAll('button[aria-label^=\"Ajouter un numéro dans la même rue\"]')].every(e => e.disabled)"), true);
   await click('Tableau de bord');
   await wait("document.body.innerText.includes('Suivi des tournées')");
   assert.equal(await evaluate(`document.body.innerText.includes('Suivi des carnets') && document.body.innerText.includes(${JSON.stringify(bookNumber)})`), true);
@@ -579,6 +580,38 @@ try {
   await wait(`document.querySelectorAll('${passageTable} tbody tr').length === 6`);
   await select('filtreRue', 'Rue Traversière');
   await wait(`document.querySelectorAll('${passageTable} tbody tr').length === 5`);
+  // A number in the same street requires only the number; duplicate errors keep the form.
+  await clickAddress('12 T Rue Traversière', 'button[aria-label^="Ajouter un numéro dans la même rue"]');
+  await wait("!!document.querySelector('dialog [name=numero]')");
+  assert.equal(await evaluate("document.querySelector('dialog input[readonly]').value"), 'Rue Traversière');
+  assert.equal(await evaluate("document.querySelector('dialog [name=codePostal]').value"), '10000');
+  assert.equal(await evaluate("document.querySelector('dialog [name=ville]').value"), 'Troyes');
+  assert.equal(await evaluate("document.querySelector('dialog [name=numero]').value"), '');
+  for (const field of ['batiment', 'etage', 'appartement', 'porte', 'carnetId', 'recuId']) {
+    assert.equal(await evaluate(`document.querySelector('dialog [name=${field}]').value`), '');
+  }
+  await fill('numero', '30 bis'); await select('statut', 'Absent'); await submitDialog();
+  await wait(`document.querySelector('${passageTable}')?.innerText.includes('30 bis Rue Traversière')`);
+  await clickAddress('12 T Rue Traversière', 'button[aria-label^="Ajouter un numéro dans la même rue"]');
+  await fill('numero', '30 bis'); await select('statut', 'Absent');
+  await evaluate("document.querySelector('dialog form').requestSubmit()");
+  await wait("!!document.querySelector('dialog [role=alert]')");
+  assert.equal(await evaluate("document.querySelector('dialog [name=numero]').value"), '30 bis');
+  await fill('numero', '30 ter'); await select('statut', 'Vente');
+  await select('carnetId', `Carnet ${exceptionalBook}`);
+  await select('recuId', `N° ${firstReceipt + 106}`);
+  await fill('montant', '8.50'); await submitDialog();
+  await wait(`document.querySelector('${passageTable}')?.innerText.includes('30 ter Rue Traversière')`);
+  assert.equal(await evaluate(`document.querySelectorAll('${passageTable} tbody tr').length`), 8);
+  await reloadPage();
+  await wait("!!document.querySelector('nav') && document.body.innerText.includes('Suivi des tournées')");
+  await click('Tournées'); await click(exceptionalTour);
+  await wait(`document.querySelectorAll('${passageTable} tbody tr').length === 8`);
+  assert.match(await evaluate(`document.querySelector('${passageTable}').innerText`), /30 bis Rue Traversière/);
+  assert.match(await evaluate(`document.querySelector('${passageTable}').innerText`), /30 ter Rue Traversière/);
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true);
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false });
   await click('Tableau de bord');
   await wait("document.body.innerText.includes('Suivi des tournées')");
   await command('Network.enable');
@@ -595,7 +628,7 @@ try {
   await click('Déconnexion');
   await wait("!!document.querySelector('[name=amicaleId]')");
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('OK: separate calendar and address ratios in tour cards, tour lists, dashboard and campaigns; donation counting, corrections and zero stock; multiple team selection, persistence, individual removal and validation lock; CB payments, apartment creation and persistence, result colors, cumulative street/status/book filters, exact receipt search, sorting and filter retention; browser deletion confirmations and dependency blocking for sectors, addresses, users, tours and campaigns; polygon drawing, address import and persistence; receipts, sales/donations, dashboard, validation, offline retry and logout.');
+  console.log('OK: separate calendar and address ratios in tour cards, tour lists, dashboard and campaigns; donation counting, corrections and zero stock; multiple team selection, persistence, individual removal and validation lock; CB payments, apartments and same-street numbers, duplicate rejection and persistence, result colors, cumulative street/status/book filters, exact receipt search, sorting and filter retention; browser deletion confirmations and dependency blocking for sectors, addresses, users, tours and campaigns; polygon drawing, address import and persistence; receipts, sales/donations, dashboard, validation, offline retry and logout.');
 } finally {
   socket?.close();
   chrome.kill('SIGTERM');

@@ -10,7 +10,18 @@ const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
 });
 const loaded = { exports: {} };
 vm.runInThisContext(`(function(exports) { ${compiled.outputText}\n})`, { filename })(loaded.exports);
-const { compareAddresses, streetOf } = loaded.exports;
+const { addressWithNumber, compareAddresses, streetOf } = loaded.exports;
+
+test('Un nouveau numéro remplace le numéro et le suffixe en conservant la rue entière', () => {
+  for (const ligne1 of ['12 T rue du 8 Mai 1945', '12bis rue du 8 Mai 1945', '12 ter rue du 8 Mai 1945', 'rue du 8 Mai 1945']) {
+    const source = { ligne1 };
+    assert.equal(addressWithNumber(source, '  3   ter  '), '3 ter rue du 8 Mai 1945');
+    assert.equal(addressWithNumber(source, '171B'), '171B rue du 8 Mai 1945');
+    assert.equal(source.ligne1, ligne1);
+    for (const invalid of ['', ' ', '-2', '1.5', '3 rue Autre']) assert.throws(() => addressWithNumber(source, invalid), /numéro valide/);
+  }
+  assert.throws(() => addressWithNumber({ ligne1: `1 ${'r'.repeat(178)}` }, '171'), /180 caractères/);
+});
 
 test('Les rues passent avant les numéros, les suffixes équivalents gardent leur ordre', () => {
   const lines = ['2 rue Zola', '171 rue Alpha', '3t rue Alpha', '2 rue Alpha', '3 ter RUE Alpha', '10 rue Zola', '3 rue Alpha'];

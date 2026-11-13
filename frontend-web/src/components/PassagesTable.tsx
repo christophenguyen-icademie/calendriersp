@@ -11,7 +11,7 @@ export const defaultPassageFilters: PassageFilters = { street: '', status: '', b
 const compare = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' }).compare;
 const statusOf = (address: Address) => address.passage?.statut ?? 'NON_VISITEE';
 
-export function PassagesTable({ tour, canManage, filters, onFilters, onEdit, onDuplicate, onNew, onChange }: { tour: Tour; canManage: boolean; filters: PassageFilters; onFilters: (filters: PassageFilters) => void; onEdit: (address: Address) => void; onDuplicate: (address: Address) => void; onNew: () => void; onChange: () => void }) {
+export function PassagesTable({ tour, canManage, filters, onFilters, onEdit, onDuplicate, onSameStreet, onNew, onChange }: { tour: Tour; canManage: boolean; filters: PassageFilters; onFilters: (filters: PassageFilters) => void; onEdit: (address: Address) => void; onDuplicate: (address: Address) => void; onSameStreet: (address: Address) => void; onNew: () => void; onChange: () => void }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersId = useId();
   const activeFilters = [filters.street, filters.status, filters.book, filters.receipt.trim()].filter(Boolean).length;
@@ -53,6 +53,7 @@ export function PassagesTable({ tour, canManage, filters, onFilters, onEdit, onD
       <td data-label="Actions" className="passage-actions"><div className="row-actions">
         <button className="secondary" disabled={locked} onClick={() => onEdit(a)} aria-label={`${a.passage ? 'Modifier' : 'Saisir'} le passage · ${a.ligne1} ${housingLabel(a)}`}>{a.passage ? 'Modifier' : 'Saisir'}</button>
         <button className="secondary" disabled={locked} onClick={() => onDuplicate(a)} aria-label={`Ajouter un appartement · ${a.ligne1} ${housingLabel(a)}`}>＋ Appartement</button>
+        <button className="secondary" disabled={locked} onClick={() => onSameStreet(a)} aria-label={`Ajouter un numéro dans la même rue · ${a.ligne1}`}>＋ Numéro</button>
         {canManage && a.passage && <DeleteButton path={`/passages/${a.passage.id}`} name={`Passage · ${a.ligne1} ${housingLabel(a)}`} onDeleted={onChange} />}
       </div></td>
     </tr>)}</tbody></table></div>

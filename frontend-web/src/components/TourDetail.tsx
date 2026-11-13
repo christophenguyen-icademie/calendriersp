@@ -6,8 +6,9 @@ import { DeleteButton } from './DeleteButton';
 import { defaultPassageFilters, PassagesTable, type PassageFilters } from './PassagesTable';
 import { HousingFields, housingData } from './Housing';
 import { ActivityCards } from './ActivityCards';
+import { addressWithNumber, streetOf } from '../addressOrder';
 
-type PassageMode = 'existing' | 'duplicate' | 'new';
+type PassageMode = 'existing' | 'duplicate' | 'new' | 'same-street';
 type PassageEditor = { mode: PassageMode; address: Address | null };
 
 export function TourDetail({ id, members, canManage, onBack, onChange }: { id: string; members: Member[]; canManage: boolean; onBack: () => void; onChange: () => void }) {
@@ -35,8 +36,8 @@ export function TourDetail({ id, members, canManage, onBack, onChange }: { id: s
       {canManage && tour.statut === 'TERMINEE' && <button className="primary" onClick={() => setConfirmValidation(true)}>Valider et verrouiller la tournée</button>}
     </section>
     <Carnets tour={tour} canManage={canManage} onChange={changed} />
-    <PassagesTable tour={tour} canManage={canManage} filters={filters} onFilters={setFilters} onEdit={a => setEditor({ mode: 'existing', address: a })} onDuplicate={a => setEditor({ mode: 'duplicate', address: a })} onNew={() => setEditor({ mode: 'new', address: null })} onChange={changed} />
-    {editor && <Modal title={editor.mode === 'new' ? 'Nouvelle adresse et passage' : editor.mode === 'duplicate' ? `Ajouter un appartement · ${editor.address?.ligne1}` : editor.address?.ligne1 ?? ''} onClose={() => setEditor(null)}><PassageForm address={editor.address} tourId={id} books={tour.carnets} mode={editor.mode} locality={tour.listeAdresses?.[0]} onSaved={() => { if (editor.mode === 'new') setFilters({ ...defaultPassageFilters }); setEditor(null); changed(); }} /></Modal>}
+    <PassagesTable tour={tour} canManage={canManage} filters={filters} onFilters={setFilters} onEdit={a => setEditor({ mode: 'existing', address: a })} onDuplicate={a => setEditor({ mode: 'duplicate', address: a })} onSameStreet={a => setEditor({ mode: 'same-street', address: a })} onNew={() => setEditor({ mode: 'new', address: null })} onChange={changed} />
+    {editor && <Modal title={editor.mode === 'same-street' ? `Nouveau numéro · ${streetOf(editor.address!)}` : editor.mode === 'new' ? 'Nouvelle adresse et passage' : editor.mode === 'duplicate' ? `Ajouter un appartement · ${editor.address?.ligne1}` : editor.address?.ligne1 ?? ''} onClose={() => setEditor(null)}><PassageForm address={editor.address} tourId={id} books={tour.carnets} mode={editor.mode} locality={tour.listeAdresses?.[0]} onSaved={() => { if (editor.mode === 'new' || editor.mode === 'same-street') setFilters({ ...defaultPassageFilters }); setEditor(null); changed(); }} /></Modal>}
     {confirmValidation && <Modal title="Valider la tournée" onClose={() => setConfirmValidation(false)}><p>La validation verrouille définitivement les passages, le statut et les affectations de cette tournée.</p><Form label="Confirmer la validation" submit={() => api(`/tournees/${id}/valider`, 'POST', {})} onSuccess={() => { setConfirmValidation(false); changed(); }}><p>{tour.nom} · {tour.traitees}/{tour.adresses} adresses traitées</p></Form></Modal>}
   </>}</>;
 }
@@ -57,7 +58,9 @@ function TeamForm({ tour, members, onSaved }: { tour: Tour; members: Member[]; o
 
 function PassageForm({ address, tourId, books, mode, locality, onSaved }: { address: Address | null; tourId: string; books: Book[]; mode: PassageMode; locality?: Address; onSaved: () => void }) {
   const duplicate = mode === 'duplicate';
-  const newAddress = mode === 'new';
+  const sameStreet = mode === 'same-street';
+  const newAddress = mode === 'new' || sameStreet;
+  const location = sameStreet ? address : locality;
   const p = mode === 'existing' ? address?.passage : null;
   const [status, setStatus] = useState(p?.statut ?? 'VENTE');
   const sale = status === 'VENTE';
@@ -68,12 +71,14 @@ function PassageForm({ address, tourId, books, mode, locality, onSaved }: { addr
   const available = book?.recus?.filter(r => !r.utilise || r.id === p?.recu?.id) ?? [];
   return <Form label={newAddress ? 'Créer l’adresse et enregistrer' : duplicate ? 'Ajouter le logement et enregistrer' : 'Enregistrer'} onSuccess={onSaved} submitDisabled={needsReceipt && !books.some(b => b.recusDisponibles > 0 || b.id === p?.recu?.carnetId)} submit={d => api(newAddress ? `/tournees/${tourId}/adresses` : duplicate ? `/tournees/${tourId}/adresses/${address!.id}/dupliquer` : `/tournees/${tourId}/passages/${address!.id}`, mode === 'existing' ? 'PUT' : 'POST', {
     statut: status, commentaire: text(d, 'commentaire') || null, ...housingData(d),
-    ...(newAddress ? { ligne1: text(d, 'ligne1'), codePostal: text(d, 'codePostal'), ville: text(d, 'ville') } : {}),
+    ...(newAddress ? { ligne1: sameStreet ? addressWithNumber(address!, text(d, 'numero')) : text(d, 'ligne1'), codePostal: text(d, 'codePostal'), ville: text(d, 'ville') } : {}),
     ...(needsReceipt ? { carnetId: bookId, recuId: receiptId } : {}),
     ...(status === 'DON' ? {} : { nbCalendriers: sale ? integer(d, 'nbCalendriers') : 0, montant: sale ? text(d, 'montant').replace(',', '.') : '0.00', moyenPaiement: sale ? text(d, 'moyenPaiement') : null }),
   })}>
     {duplicate && <p className="notice">Une nouvelle ligne sera créée à cette adresse, avec son propre passage. Précisez un logement différent et sélectionnez un nouveau reçu pour une vente ou un don.</p>}
-    {newAddress && <><p className="notice">Cette adresse sera ajoutée au secteur de la tournée avec son passage.</p><Field label="Numéro et rue"><input name="ligne1" required maxLength={180} autoFocus placeholder="Ex. 12 bis rue Traversière" /></Field><Field label="Code postal"><input name="codePostal" required maxLength={10} defaultValue={locality?.codePostal ?? ''} /></Field><Field label="Ville"><input name="ville" required maxLength={120} defaultValue={locality?.ville ?? ''} /></Field></>}
+    {newAddress && <><p className="notice">Cette adresse sera ajoutée au secteur de la tournée avec son passage.</p>
+      {sameStreet ? <><Field label="Rue"><input value={streetOf(address!)} readOnly /></Field><Field label="Numéro"><input name="numero" required maxLength={20} autoFocus placeholder="Ex. 12 bis" /></Field></> : <Field label="Numéro et rue"><input name="ligne1" required maxLength={180} autoFocus placeholder="Ex. 12 bis rue Traversière" /></Field>}
+      <Field label="Code postal"><input name="codePostal" required maxLength={10} defaultValue={location?.codePostal ?? ''} /></Field><Field label="Ville"><input name="ville" required maxLength={120} defaultValue={location?.ville ?? ''} /></Field></>}
     <HousingFields address={mode === 'existing' ? address ?? undefined : undefined} />
     <Field label="Résultat du passage"><select name="statut" value={status} onChange={e => setStatus(e.target.value)}>{['VENTE', 'DON', 'REFUS', 'ABSENT', 'A_REVOIR', 'NON_VISITEE'].map(s => <option value={s} key={s}>{labels[s]}</option>)}</select></Field>
     {needsReceipt && <>
