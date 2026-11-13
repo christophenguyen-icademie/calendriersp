@@ -46,7 +46,7 @@ final class Workspace
     {
         $user = $this->user();
         $amicale = $user->getAmicale();
-        return ['id' => (string) $user->getId(), 'email' => $user->getEmail(), 'roles' => $user->getRoles(), 'canManage' => $this->isManager(),
+        return ['id' => (string) $user->getId(), 'email' => $user->getEmail(), 'nom' => $user->getNom(), 'roles' => $user->getRoles(), 'canManage' => $this->isManager(),
             'amicale' => ['id' => (string) $amicale->getId(), 'identifiant' => $amicale->getIdentifiant(), 'nom' => $amicale->getNom(), 'departement' => $amicale->getDepartement(),
                 'campagne' => $amicale->getParametres()['campagne'] ?? (int) date('Y')]];
     }
@@ -58,7 +58,7 @@ final class Workspace
 
     public function users(): array
     {
-        return $this->em->getRepository(User::class)->findBy(['amicale' => $this->user()->getAmicale()], ['email' => 'ASC']);
+        return $this->em->getRepository(User::class)->findBy(['amicale' => $this->user()->getAmicale()], ['nom' => 'ASC', 'email' => 'ASC']);
     }
 
     public function adresses(?Secteur $secteur = null): array
@@ -113,7 +113,7 @@ final class Workspace
 
     public function userData(User $u): array
     {
-        return ['id' => (string) $u->getId(), 'email' => $u->getEmail(), 'roles' => $u->getRoles(), 'active' => $u->isActive()];
+        return ['id' => (string) $u->getId(), 'email' => $u->getEmail(), 'nom' => $u->getNom(), 'roles' => $u->getRoles(), 'active' => $u->isActive()];
     }
 
     public function adresseData(Adresse $a): array

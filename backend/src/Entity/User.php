@@ -23,6 +23,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Amicale
     #[ORM\Column(length: 180)]
     private string $email;
 
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $nom = null;
+
     #[ORM\Column(type: 'json')]
     private array $roles = ['ROLE_SAPEUR'];
 
@@ -47,6 +50,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, Amicale
     public function getAmicale(): Amicale { return $this->amicale; }
     public function getEmail(): string { return $this->email; }
     public function setEmail(string $email): self { $this->email = mb_strtolower(trim($email)); return $this; }
+    public function getNom(): ?string { return $this->nom; }
+    public function setNom(string $nom): self
+    {
+        $nom = trim($nom);
+        if ($nom === '' || mb_strlen($nom) > 180) {
+            throw new \InvalidArgumentException('Le nom doit contenir entre 1 et 180 caractères.');
+        }
+        $this->nom = $nom;
+        return $this;
+    }
     public function getUserIdentifier(): string { return $this->email; }
     public function getRoles(): array { return array_values(array_unique([...$this->roles, 'ROLE_USER'])); }
     public function setRoles(array $roles): self { $this->roles = $roles; return $this; }

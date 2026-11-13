@@ -51,6 +51,8 @@ try:
     assert sql("SELECT COUNT(*) FROM adresse WHERE complement='Entrée par la cour' AND batiment IS NULL AND etage IS NULL AND appartement IS NULL AND porte IS NULL AND identite IS NULL;").strip() == "1"
     assert sql("SELECT id FROM amicale ORDER BY id;") == original_ids
     assert sql("SELECT date_passage::text || '|' || updated_at::text FROM passage;").strip() == "2024-11-10|2024-11-10 21:15:00"
+    assert sql("SELECT COUNT(*) FROM app_user WHERE nom IS NULL AND email='migration@example.test' AND id='10000000-0000-4000-8000-000000000006';").strip() == '1'
+    assert sql("SELECT saisi_par_id::text FROM passage;").strip() == '10000000-0000-4000-8000-000000000006'
     identifiers = json.loads(sql("SELECT json_agg(identifiant ORDER BY created_at,id) FROM amicale;"))
     assert len(identifiers) == len(set(identifiers)) == 6
     assert all(re.fullmatch(r"[a-z0-9]{4,20}", code) for code in identifiers), identifiers

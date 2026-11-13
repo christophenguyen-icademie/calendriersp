@@ -91,4 +91,18 @@ code { overflow-wrap: anywhere; }
 .passage-status.status-refus { background: #fee2e2; color: #991b1b; }
 .passage-status.status-absent, .passage-status.status-a_revoir { background: #ffedd5; color: #9a3412; }
 .sort-heading { border: 0; padding: 0; background: transparent; color: #475569; cursor: pointer; font: inherit; text-align: left; white-space: nowrap; }
+.filter-reset { margin-bottom: 18px; }
+.passages-panel > .panel-head { flex-wrap: wrap; gap: 12px; }
+.passages-table .row-actions button { min-height: 44px; padding: 8px 12px; }
 @media (max-width: 650px) { .passage-filters, .housing-fields { grid-template-columns: 1fr 1fr; } .passages-panel .toolbar { flex-wrap: wrap; } }
+@media (max-width: 650px) {
+  .passages-table, .passages-table tbody { display: block; width: 100%; }
+  .passages-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .passages-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px; margin-bottom: 12px; border: 1px solid #e8ecf1; border-radius: 10px; }
+  .passages-table td { display: block; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+  .passages-table td::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 10px; font-weight: 700; color: #64748b; }
+  .passages-table .passage-address, .passages-table .passage-actions { grid-column: 1 / -1; }
+  .passages-table .passage-address { font-size: 14px; font-weight: 700; }
+  .passages-table .passage-address::before, .passages-table .passage-actions::before { display: none; }
+  .passages-table .passage-status { white-space: normal; }
+}

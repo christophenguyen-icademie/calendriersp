@@ -74,7 +74,13 @@ try {
     }
     throw new Error(`Timed out: ${expression}\n${await evaluate('document.body.innerText')}\nNetwork failures: ${JSON.stringify(networkFailures)}`);
   };
-  const fill = (name, value) => evaluate(`(() => {
+  const ensureFilters = async () => {
+    await evaluate("document.querySelector('[role=button][aria-label^=\"Afficher les filtres et le tri\"]')?.click()");
+    await wait("!!document.querySelector('select[aria-label=Rue]')");
+  };
+  const fill = async (name, value) => {
+    if (name === 'Rechercher un reçu') await ensureFilters();
+    return evaluate(`(() => {
     const el = document.querySelector('[aria-label=${JSON.stringify(name)}]');
     if (!el) throw new Error('Field missing: ' + ${JSON.stringify(name)});
     const prototype = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -82,7 +88,9 @@ try {
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
+  };
   const click = async label => {
+    if (label === 'Réinitialiser les filtres') await ensureFilters();
     await wait(`!![...document.querySelectorAll('[role=button],button')].find(e => e.textContent.trim() === ${JSON.stringify(label)} && !e.disabled && e.getAttribute('aria-disabled') !== 'true')`);
     return evaluate(`(() => {
     const el = [...document.querySelectorAll('[role=button],button')].find(e => e.textContent.trim() === ${JSON.stringify(label)});
@@ -90,7 +98,18 @@ try {
     el.click();
   })()`);
   };
-  const select = (name, label) => evaluate(`(() => {
+  const clickAddress = async (action, line) => {
+    const prefix = `${action}${action === 'Ajouter un appartement' ? '' : ' le passage'} · ${line}`;
+    await wait(`[...document.querySelectorAll('[role=button]')].some(e => e.getAttribute('aria-label')?.startsWith(${JSON.stringify(prefix)}) && e.getAttribute('aria-disabled') !== 'true')`);
+    await evaluate(`[...document.querySelectorAll('[role=button]')].find(e => e.getAttribute('aria-label')?.startsWith(${JSON.stringify(prefix)})).click()`);
+  };
+  const select = async (name, label) => {
+    if (['Rue', 'Filtrer par résultat', 'Filtrer par carnet', 'Trier par', 'Ordre'].includes(name)) await ensureFilters();
+    await wait(`(() => {
+      const el = document.querySelector('select[aria-label=${JSON.stringify(name)}]');
+      return !!el && [...el.options].some(o => o.textContent === ${JSON.stringify(label)} || o.textContent.startsWith(${JSON.stringify(label)}));
+    })()`);
+    return evaluate(`(() => {
     const el = document.querySelector('select[aria-label=${JSON.stringify(name)}]');
     if (!el) throw new Error('Select missing: ' + ${JSON.stringify(name)});
     const option = [...el.options].find(o => o.textContent === ${JSON.stringify(label)} || o.textContent.startsWith(${JSON.stringify(label)}));
@@ -98,6 +117,7 @@ try {
     el.value = option.value;
     el.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
+  };
   const suffix = Date.now();
   // This setup can only target the isolated test API and its seeded tenants.
   let cookie = '', csrf = '';
@@ -128,7 +148,11 @@ try {
     await click('Se connecter'); await connected();
     await select('Campagne', '2026');
   };
-  const openTour = async () => { await click(`Ouvrir ${tour.nom}`); await wait("!!document.querySelector('select[aria-label=Rue]')"); };
+  const openTour = async () => {
+    await click(`Ouvrir ${tour.nom}`);
+    await wait("document.body.innerText.includes('adresses affichées')");
+    assert.equal(await evaluate("!!document.querySelector('select[aria-label=Rue]')"), false);
+  };
   const memoryKey = 'mobilesp.calendriers.connexion.v1';
   const memorySwitch = '[role=switch][aria-label="Mémoriser mes informations de connexion"]';
   const toggleMemory = async () => {
@@ -183,21 +207,21 @@ try {
   assert.equal(await evaluate("document.querySelector('[aria-label=\"Nombre de reçus\"]').value"), '25');
   await fill('Numéro du carnet', bookName); await fill('Premier reçu', String(receipt));
   await click('Créer le carnet');
-  await wait("document.body.innerText.includes('Carnet créé sur le serveur.') && !!document.querySelector('select[aria-label=Rue]')");
-  await click(`Saisir · ${source.ligne1}`);
+  await wait("document.body.innerText.includes('Carnet créé sur le serveur.') && document.body.innerText.includes('adresses affichées')");
+  await clickAddress('Saisir', source.ligne1);
   assert.equal(await evaluate("document.querySelector('[aria-label=Porte]').value"), 'Gauche');
   await fill('Date du passage', '10/11/2026'); await fill('Nombre de calendriers', '2'); await fill('Montant total encaissé (€)', '23,45');
   await select('Moyen de paiement', 'CB'); await select('Carnet de reçus', bookName); await select('Numéro du reçu', `N° ${receipt}`);
   await fill('Commentaire', 'Vente CB depuis MobileSP'); await click('Enregistrer le passage'); await saved();
   await counter(2, 2, 0);
-  await click(`Modifier · ${source.ligne1}`); await fill('Nombre de calendriers', '3');
+  await clickAddress('Modifier', source.ligne1); await fill('Nombre de calendriers', '3');
   await click('Enregistrer le passage'); await saved(); await counter(3, 3, 0);
-  await click(`Modifier · ${source.ligne1}`); await fill('Nombre de calendriers', '2');
+  await clickAddress('Modifier', source.ligne1); await fill('Nombre de calendriers', '2');
   await click('Enregistrer le passage'); await saved(); await counter(2, 2, 0);
   let detail = await api(`/tournees/${tour.id}`);
   assert.equal(detail.montant, '23.45'); assert.equal(detail.listeAdresses[0].passage.moyenPaiement, 'CB');
   assert.equal(detail.listeAdresses[0].passage.datePassage, '2026-11-10');
-  await click(`Ajouter un appartement · ${source.ligne1}`);
+  await clickAddress('Ajouter un appartement', source.ligne1);
   for (const name of ['Bâtiment', 'Étage', 'Appartement', 'Porte']) assert.equal(await evaluate(`document.querySelector('[aria-label=${JSON.stringify(name)}]').value`), '');
   await fill('Bâtiment', 'B'); await fill('Étage', '3'); await fill('Appartement', '12'); await fill('Porte', 'Droite');
   await select('Résultat du passage', 'Don');
@@ -206,7 +230,7 @@ try {
   assert.equal(await evaluate(`!![...document.querySelector('select[aria-label="Numéro du reçu"]').options].find(o => o.textContent === 'N° ${receipt}')`), false);
   await fill('Commentaire', 'Don appartement'); await click('Enregistrer le passage'); await saved();
   await counter(3, 2, 1);
-  await click(`Ajouter un appartement · ${source.ligne1}`);
+  await clickAddress('Ajouter un appartement', source.ligne1);
   for (const name of ['Bâtiment', 'Étage', 'Appartement', 'Porte']) assert.equal(await evaluate(`document.querySelector('[aria-label=${JSON.stringify(name)}]').value`), '');
   await click('Retour aux adresses');
   const createAddress = async (line, result, amount, recu) => {
@@ -222,10 +246,16 @@ try {
   assert.equal(detail.montant, '31.00'); assert.equal(detail.listeAdresses.length, 5);
   assert.equal(detail.carnets[0].recusUtilises, 3); assert.equal(detail.carnets[0].dons, 1);
   await counter(4, 3, 1);
+  await ensureFilters();
   assert.deepEqual(await evaluate("[...document.querySelector('select[aria-label=Rue]').options].map(o => o.textContent)"), ['Toutes les rues', 'avenue Nouvelle', 'Rue Traversière']);
   await select('Rue', 'Rue Traversière'); await select('Filtrer par résultat', 'Don'); await select('Filtrer par carnet', bookName);
   await fill('Rechercher un reçu', String(receipt + 1));
   await wait("document.body.innerText.includes('1 / 5 adresses affichées')");
+  await click('Masquer les filtres (4 actifs)');
+  assert.equal(await evaluate("!!document.querySelector('select[aria-label=Rue]')"), false);
+  assert.equal(await evaluate("document.body.innerText.includes('1 / 5 adresses affichées')"), true);
+  await ensureFilters();
+  assert.equal(await evaluate("document.querySelector('[aria-label=\"Rechercher un reçu\"]').value"), String(receipt + 1));
   await counter(4, 3, 1);
   await fill('Rechercher un reçu', String(receipt)); await wait("document.body.innerText.includes('0 / 5 adresses affichées')");
   await click('Réinitialiser les filtres'); await wait("document.body.innerText.includes('5 / 5 adresses affichées')");
@@ -244,7 +274,7 @@ try {
   await select('Numéro du reçu', `N° ${receipt + 4}`); await click('Enregistrer le passage'); await saved();
 
   // No success or automatic retry when the write response is unavailable.
-  await click(`Modifier · ${source.ligne1}`); await fill('Commentaire', 'Saisie conservée hors connexion');
+  await clickAddress('Modifier', source.ligne1); await fill('Commentaire', 'Saisie conservée hors connexion');
   await command('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   await click('Enregistrer le passage'); await wait("document.body.innerText.includes('La confirmation du serveur n’a pas été reçue')");
   assert.equal(await evaluate("document.querySelector('[aria-label=Commentaire]').value"), 'Saisie conservée hors connexion');
@@ -255,18 +285,21 @@ try {
   await api(`/tournees/${tour.id}/statut`, 'PATCH', { statut: 'TERMINEE' }); await api(`/tournees/${tour.id}/valider`, 'POST', {});
   await click('Actualiser'); await wait("document.body.innerText.includes('Tournée validée : consultation uniquement.')");
   await counter(6, 4, 2);
-  assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Nouvelle adresse' || e.textContent.includes('Ajouter un appartement'))"), false);
+  assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Nouvelle adresse' || e.getAttribute('aria-label')?.startsWith('Ajouter un appartement'))"), false);
   const screenshot = await command('Page.captureScreenshot', { format: 'png' });
   await writeFile('/tmp/mobilesp-calendriers-connected.png', Buffer.from(screenshot.data, 'base64'));
   await click('Déconnexion'); await wait("!!document.querySelector('[aria-label=\"Mot de passe\"]')");
 
   const workerPassword = 'Mobile-test-password-123!';
-  const worker = await api('/sapeurs', 'POST', { email: `mobile-${suffix}@example.test`, password: workerPassword, role: 'ROLE_SAPEUR' });
+  const workerName = `Camille Martin ${suffix}`;
+  const worker = await api('/sapeurs', 'POST', { nom: workerName, email: `mobile-${suffix}@example.test`, password: workerPassword, role: 'ROLE_SAPEUR' });
   const workerTour = await api('/tournees', 'POST', { nom: `Tournée sapeur ${suffix}`, secteurId: sector.id, dateDebut: '2026-11-10' });
   await api(`/tournees/${workerTour.id}/affectations`, 'POST', { userId: worker.id });
   await login({ amicaleId: accounts.B.amicaleId, email: worker.email, password: workerPassword });
+  await wait(`document.body.innerText.includes(${JSON.stringify('Équipe : ' + workerName)})`);
   assert.equal(await evaluate(`document.body.innerText.includes(${JSON.stringify(privateTour.nom)})`), false);
-  await click(`Ouvrir ${workerTour.nom}`); await wait("!!document.querySelector('select[aria-label=Rue]')");
+  await click(`Ouvrir ${workerTour.nom}`); await wait("document.body.innerText.includes('adresses affichées')");
+  await wait(`document.body.innerText.includes(${JSON.stringify('Équipe : ' + workerName)})`);
   await counter(0, 0, 0, 0);
   await wait("document.body.innerText.includes('Stock à renseigner')");
   assert.equal(await evaluate("[...document.querySelectorAll('[role=button],button')].some(e => e.textContent.trim() === 'Ajouter un carnet')"), false);

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "scripts": { "dev": "vite --host 0.0.0.0", "build": "tsc -b && vite build", "preview": "vite preview" },
+  "scripts": { "dev": "vite --host 0.0.0.0", "build": "tsc -b && vite build", "preview": "vite preview", "test": "node --test scripts/test-addresses.cjs" },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
     "leaflet": "^1.9.4",

@@ -1,7 +1,8 @@
-export type Member = { id: string; email: string; roles: string[]; active: boolean };
+export type Member = { id: string; email: string; nom: string | null; roles: string[]; active: boolean };
+export const memberName = (member: { nom?: string | null; email: string }) => member.nom?.trim() || member.email;
 export type Campaign = { id: string; annee: number; tournees: number; parDefaut: boolean };
 export type DeletionCheck = { autorisee: boolean; dependances: { type: string; nombre: number; libelle: string }[]; raisons: string[]; consequences: string[] };
-export type Profile = { id: string; email: string; roles: string[]; canManage: boolean; amicale: { id: string; identifiant: string; nom: string; departement: string; campagne: number } };
+export type Profile = { id: string; email: string; nom: string | null; roles: string[]; canManage: boolean; amicale: { id: string; identifiant: string; nom: string; departement: string; campagne: number } };
 export type Geometry = { type: 'Polygon'; coordinates: [number, number][][] };
 export type Sector = { id: string; nom: string; type: string; polygone: Geometry | null };
 export type Receipt = { id: string; numero: number; utilise: boolean; annule: boolean };

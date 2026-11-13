@@ -60,7 +60,13 @@ try {
     }
     throw new Error(`Timed out: ${expression}\n${await evaluate('document.body.innerText')}\nNetwork failures: ${JSON.stringify(networkFailures)}`);
   };
-  const fill = (name, value) => evaluate(`(() => {
+  const ensureFilters = async () => {
+    await evaluate("document.querySelector('.passages-panel button[aria-expanded=false]')?.click()");
+    await wait("document.querySelector('[name=filtreRue]')?.offsetParent !== null && !!document.querySelector('[name=filtreRue]')");
+  };
+  const fill = async (name, value) => {
+    if (name === 'rechercheRecu') await ensureFilters();
+    return evaluate(`(() => {
     const el = document.querySelector('[name=${JSON.stringify(name)}]') || document.querySelector('[aria-label=${JSON.stringify(name)}]');
     if (!el) throw new Error('Field missing: ' + ${JSON.stringify(name)});
     const prototype = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -68,7 +74,9 @@ try {
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
+  };
   const click = async label => {
+    if (label === 'Réinitialiser les filtres et le tri') await ensureFilters();
     await wait(`!![...document.querySelectorAll('button')].find(e => e.textContent.trim() === ${JSON.stringify(label)} && !e.disabled)`);
     return evaluate(`(() => {
     const el = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === ${JSON.stringify(label)});
@@ -76,11 +84,14 @@ try {
     el.click();
   })()`);
   };
-  const select = (name, label) => evaluate(`(() => {
+  const select = async (name, label) => {
+    if (['filtreRue', 'filtreStatut', 'filtreCarnet', 'triPassages', 'ordrePassages'].includes(name)) await ensureFilters();
+    return evaluate(`(() => {
     const el = document.querySelector('dialog select[name=${JSON.stringify(name)}]') || document.querySelector('select[name=${JSON.stringify(name)}]');
     el.value = [...el.options].find(o => o.textContent === ${JSON.stringify(label)}).value;
     el.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
+  };
   const submitDialog = async () => { await evaluate("document.querySelector('dialog form').requestSubmit()"); await wait("!document.querySelector('dialog')"); };
   const waitActivity = async (scope, calendars, stock, remaining, addresses) => {
     const ratio = (value, total) => `${value.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')}`;
@@ -154,9 +165,11 @@ try {
   await wait("document.body.innerText.includes('20 avenue des Tests')");
 
   const teamEmails = [`equipe-1-${suffix}@example.test`, `equipe-2-${suffix}@example.test`];
+  const teamNames = [`Élodie Martin ${suffix}`, `Thomas Durand ${suffix}`];
   await click('Sapeurs');
-  for (const email of teamEmails) {
+  for (const [index, email] of teamEmails.entries()) {
     await click('＋ Ajouter');
+    await fill('nom', teamNames[index]);
     await fill('email', email);
     await fill('password', 'Browser-team-123!');
     await submitDialog();
@@ -174,26 +187,31 @@ try {
   await click(tour);
   await wait("document.body.innerText.includes('Passages aux adresses')");
   assert.equal(await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent === 'Ajouter à l’équipe').disabled"), true);
-  for (const email of teamEmails) {
-    await evaluate(`[...document.querySelectorAll('.team-option')].find(label => label.textContent === ${JSON.stringify(email)}).querySelector('input').click()`);
+  assert.equal(await evaluate("document.querySelector('[name=filtreRue]').offsetParent === null"), true);
+  for (const name of teamNames) {
+    await evaluate(`[...document.querySelectorAll('.team-option')].find(label => label.textContent === ${JSON.stringify(name)}).querySelector('input').click()`);
   }
   await wait("document.body.innerText.includes('2 sapeurs sélectionnés')");
   await click('Ajouter à l’équipe');
   await wait("document.querySelectorAll('.team-list li').length === 2");
-  for (const email of teamEmails) {
-    assert.equal(await evaluate(`document.querySelector('.team-list').innerText.includes(${JSON.stringify(email)})`), true);
-    assert.equal(await evaluate(`[...document.querySelectorAll('.team-option')].some(label => label.textContent === ${JSON.stringify(email)})`), false);
+  for (const name of teamNames) {
+    assert.equal(await evaluate(`document.querySelector('.team-list').innerText.includes(${JSON.stringify(name)})`), true);
+    assert.equal(await evaluate(`[...document.querySelectorAll('.team-option')].some(label => label.textContent === ${JSON.stringify(name)})`), false);
   }
   // Removing one member preserves the rest of the team and makes that member available again.
-  await evaluate(`[...document.querySelectorAll('.team-list li')].find(li => li.textContent.includes(${JSON.stringify(teamEmails[0])})).querySelector('button').click()`);
+  await evaluate(`[...document.querySelectorAll('.team-list li')].find(li => li.textContent.includes(${JSON.stringify(teamNames[0])})).querySelector('button').click()`);
   await wait("document.body.innerText.includes('Supprimer définitivement')");
   await click('Supprimer définitivement');
   await wait("!document.querySelector('dialog') && document.querySelectorAll('.team-list li').length === 1");
-  assert.equal(await evaluate(`document.querySelector('.team-list').innerText.includes(${JSON.stringify(teamEmails[1])})`), true);
-  await evaluate(`[...document.querySelectorAll('.team-option')].find(label => label.textContent === ${JSON.stringify(teamEmails[0])}).querySelector('input').click()`);
+  assert.equal(await evaluate(`document.querySelector('.team-list').innerText.includes(${JSON.stringify(teamNames[1])})`), true);
+  await evaluate(`[...document.querySelectorAll('.team-option')].find(label => label.textContent === ${JSON.stringify(teamNames[0])}).querySelector('input').click()`);
   await click('Ajouter à l’équipe');
   await wait("document.querySelectorAll('.team-list li').length === 2");
-  await click('Saisir');
+  const clickAddress = async (line, selector) => evaluate(`(() => {
+    const row = [...document.querySelectorAll('table[aria-label="Résultats des passages"] tbody tr')].find(row => row.cells[0].textContent.startsWith(${JSON.stringify(line)}));
+    row.querySelector(${JSON.stringify(selector)}).click();
+  })()`);
+  await clickAddress('3 rue du navigateur', 'button[aria-label^="Saisir le passage"]');
   assert.equal(await evaluate("document.querySelector('dialog button[type=submit]').disabled"), true);
   assert.equal(await evaluate("document.querySelector('dialog [name=statut]').disabled"), false);
   await select('statut', 'Absent');
@@ -207,7 +225,7 @@ try {
   assert.equal(await evaluate("document.querySelector('dialog [name=nombreRecus]').value"), '25');
   await submitDialog();
   await wait(`document.body.innerText.includes(${JSON.stringify(bookNumber)})`);
-  await click('Saisir');
+  await clickAddress('3 rue du navigateur', 'button[aria-label^="Saisir le passage"]');
   await select('carnetId', `Carnet ${bookNumber}`);
   await select('recuId', `N° ${firstReceipt}`);
   await fill('nbCalendriers', '2');
@@ -222,7 +240,7 @@ try {
   assert.match(await evaluate('document.body.innerText'), /12,30/);
 
   // A second passage cannot select the receipt already used by the first one.
-  await click('Saisir');
+  await clickAddress('4 rue du navigateur', 'button[aria-label^="Saisir le passage"]');
   await select('statut', 'Don');
   await select('carnetId', `Carnet ${bookNumber}`);
   assert.equal(await evaluate(`[...document.querySelector('dialog [name=recuId]').options].some(o => o.textContent === 'N° ${firstReceipt}')`), false);
@@ -283,7 +301,7 @@ try {
   const passageTable = 'table[aria-label="Résultats des passages"]';
   await wait(`!!document.querySelector('${passageTable}')`);
   for (const [apartment, status] of [['102', 'Refus'], ['103', 'Absent'], ['104', 'À revoir'], ['105', 'Don']]) {
-    await evaluate(`[...document.querySelectorAll('${passageTable} tbody tr')][0].querySelector('button[aria-label^="Ajouter un appartement"]').click()`);
+    await clickAddress('3 rue du navigateur', 'button[aria-label^="Ajouter un appartement"]');
     await wait("!!document.querySelector('dialog [name=appartement]')");
     for (const field of ['batiment', 'etage', 'appartement', 'porte']) {
       assert.equal(await evaluate(`document.querySelector('dialog [name=${field}]').value`), '');
@@ -343,11 +361,11 @@ try {
   await select('triPassages', 'Résultat');
   assert.equal(await evaluate(`[...document.querySelectorAll('${passageTable} tbody tr')].at(-1).querySelector('.passage-status').textContent`), 'Vente');
   await click('Réinitialiser les filtres et le tri');
-  assert.match(await evaluate(`document.querySelector('${passageTable} tbody tr td').textContent`), /^3 rue/);
-  assert.match(await evaluate(`[...document.querySelectorAll('${passageTable} tbody tr')].at(-1).cells[0].textContent`), /^20 avenue/);
+  assert.match(await evaluate(`document.querySelector('${passageTable} tbody tr td').textContent`), /^20 avenue/);
+  assert.match(await evaluate(`[...document.querySelectorAll('${passageTable} tbody tr')].at(-1).cells[0].textContent`), /^4 rue/);
   await evaluate(`document.querySelector('${passageTable} th button').click()`);
   await wait(`document.querySelector('${passageTable} th').getAttribute('aria-sort') === 'descending'`);
-  assert.match(await evaluate(`document.querySelector('${passageTable} tbody tr td').textContent`), /^20 avenue/);
+  assert.match(await evaluate(`document.querySelector('${passageTable} tbody tr td').textContent`), /^4 rue/);
   await click('Réinitialiser les filtres et le tri');
   await reloadPage();
   await wait("!!document.querySelector('nav') && document.body.innerText.includes('Suivi des tournées')");
@@ -474,6 +492,7 @@ try {
   await click('Sapeurs');
   await click('＋ Ajouter');
   const disposableEmail = `suppression-${suffix}@example.test`;
+  await fill('nom', `Sapeur temporaire ${suffix}`);
   await fill('email', disposableEmail);
   await fill('password', 'Browser-deletion-123!');
   await submitDialog();

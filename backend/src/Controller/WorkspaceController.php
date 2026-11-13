@@ -77,10 +77,22 @@ final class WorkspaceController
         }
         $role = Input::choice($d, 'role', ['ROLE_SAPEUR', 'ROLE_RESPONSABLE', 'ROLE_ADMIN_AMICALE']);
         $u = new User($this->w->user()->getAmicale(), $email);
+        // Les anciens clients peuvent encore omettre le nom ; le formulaire web le demande.
+        if (array_key_exists('nom', $d)) { $u->setNom(Input::text($d, 'nom')); }
         $u->setRoles([$role])->setPassword($hasher->hashPassword($u, Input::password($d)));
         $this->w->em->persist($u);
         $this->w->em->flush();
         return new JsonResponse($this->w->userData($u), 201);
+    }
+
+    #[Route('/api/sapeurs/{id}', methods: ['PATCH'])]
+    public function nomSapeur(string $id, Request $request): JsonResponse
+    {
+        $this->w->requireAdmin();
+        $u = $this->w->owned(User::class, $id);
+        $u->setNom(Input::text($request->toArray(), 'nom'));
+        $this->w->em->flush();
+        return new JsonResponse($this->w->userData($u));
     }
 
     #[Route('/api/tournees', methods: ['GET', 'POST'])]

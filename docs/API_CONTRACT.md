@@ -15,6 +15,12 @@ Le profil (`/api/me`, `/api/session`) expose `amicale.identifiant`, unique sur l
 
 `PATCH /api/parametres` accepte aussi `identifiant` pour l’administrateur, avec les mêmes règles (422 si invalide, 409 si déjà utilisé par une autre amicale, même avec une casse différente). Les autres champs restent obligatoires ; omettre `identifiant` conserve sa valeur. L’écriture est atomique : un conflit ne modifie aucun paramètre ni campagne. Les sessions existantes restent valides ; les prochaines connexions utilisent le nouvel identifiant.
 
+## Noms des sapeurs
+
+Les profils (`/api/me`, `/api/session`), les comptes de `/api/sapeurs` et les membres d’`equipe` des tournées exposent `nom`, de type chaîne ou `null` pour les comptes anciens non renseignés. L’e-mail reste l’identifiant de connexion. `POST /api/sapeurs` accepte le nom, requis par le formulaire web ; l’omission reste acceptée pour les anciens clients.
+
+`PATCH /api/sapeurs/{id}` reçoit `{"nom":"Élodie Martin"}` et renvoie le compte mis à jour. Le nom est nettoyé des espaces extérieurs et limité à 1–180 caractères ; les valeurs vides ou de type incorrect sont refusées (422). Seul l’administrateur peut modifier un compte de son amicale, avec CSRF. Les comptes d’une autre amicale restent introuvables (404). La modification conserve l’identifiant, le mot de passe, les rôles et les références d’affectation et de saisie. Les équipes reflètent le nouveau nom à leur prochaine lecture.
+
 ## Routes
 
 | Méthode | Route | Accès et usage |
@@ -33,7 +39,8 @@ Le profil (`/api/me`, `/api/session`) expose `amicale.identifiant`, unique sur l
 | POST | `/api/secteurs/{id}/adresses/import` | Gestion : import de l’aperçu (`token`) |
 | GET/POST | `/api/adresses` | Gestion : liste / création (`secteurId`, `ligne1`, `codePostal`, `ville`) |
 | GET | `/api/sapeurs` | Gestion : liste des comptes de l’amicale |
-| POST | `/api/sapeurs` | Administrateur : création (`email`, `password`, `role`) |
+| POST | `/api/sapeurs` | Administrateur : création (`nom`, `email`, `password`, `role` ; omission de `nom` acceptée pour les anciens clients) |
+| PATCH | `/api/sapeurs/{id}` | Administrateur : renseigner ou modifier le `nom` d’un compte de son amicale |
 | GET/POST | `/api/tournees` | Liste visible / création par la gestion (`nom`, `secteurId`, `dateDebut`, `stockCalendriers` facultatif) |
 | GET | `/api/tournees/{id}` | Détail et `listeAdresses`, avec le passage de chaque adresse |
 | GET/POST | `/api/tournees/{id}/carnets` | Liste des carnets et reçus / création par la gestion (`numero`, `premierRecu`, `nombreRecus` facultatif, 25 par défaut) |

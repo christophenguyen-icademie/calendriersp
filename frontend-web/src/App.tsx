@@ -1,6 +1,6 @@
 import { housingLabel } from './components/Housing';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { api, session, money, date, labels, type Address, type Campaign, type Dashboard, type Member, type Profile, type Sector, type Tour } from './api';
+import { api, session, money, date, labels, memberName, type Address, type Campaign, type Dashboard, type Member, type Profile, type Sector, type Tour } from './api';
 import { Field, Form, Modal, integer, text } from './components/Form';
 import { TourDetail } from './components/TourDetail';
 import { BookTable } from './components/Carnets';
@@ -41,6 +41,7 @@ function Workspace({ profile, onProfile, onLogout }: { profile: Profile; onProfi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState<Page | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [year, setYear] = useState(profile.amicale.campagne);
   const [refresh, setRefresh] = useState(0);
@@ -92,7 +93,7 @@ function Workspace({ profile, onProfile, onLogout }: { profile: Profile; onProfi
           {page === 'Tournées' && <TourTable tours={data.tours} onSelect={setSelected} onDeleted={profile.canManage ? reload : undefined} />}
           {page === 'Secteurs' && <SectorList sectors={data.sectors} addresses={data.addresses} onChange={reload} />}
           {page === 'Adresses' && <SimpleTable columns={['Adresse', 'Logement', 'Code postal', 'Ville', 'Secteur', 'Action']} rows={data.addresses.map(a => [a.ligne1, housingLabel(a) || '—', a.codePostal, a.ville, a.secteur, <DeleteButton path={`/adresses/${a.id}`} name={`${a.ligne1} ${housingLabel(a)} · ${a.ville}`} onDeleted={reload} />])} />}
-          {page === 'Sapeurs' && <SimpleTable columns={['E-mail', 'Rôle', 'État', ...(admin ? ['Action'] : [])]} rows={data.members.map(u => [u.email, u.roles.filter(r => r !== 'ROLE_USER').map(r => labels[r] ?? r).join(', '), u.active ? 'Actif' : 'Désactivé', ...(admin ? [<DeleteButton path={`/sapeurs/${u.id}`} name={u.email} onDeleted={reload} />] : [])])} />}
+          {page === 'Sapeurs' && <SimpleTable columns={['Nom', 'Identifiant (e-mail)', 'Rôle', 'État', ...(admin ? ['Action'] : [])]} rows={data.members.map(u => [u.nom || 'Nom à renseigner', u.email, u.roles.filter(r => r !== 'ROLE_USER').map(r => labels[r] ?? r).join(', '), u.active ? 'Actif' : 'Désactivé', ...(admin ? [<div className="row-actions"><button className="secondary" onClick={() => setEditingMember(u)} aria-label={`Modifier le nom de ${memberName(u)}`}>Modifier le nom</button><DeleteButton path={`/sapeurs/${u.id}`} name={memberName(u)} onDeleted={reload} /></div>] : [])])} />}
         </section>}
         {page === 'Campagne' && data.dashboard && <><Campaigns campaigns={data.campaigns} year={year} onYear={setYear} defaultYear={profile.amicale.campagne} onChange={reload} /><Stats dashboard={data.dashboard} /><Payments dashboard={data.dashboard} /></>}
         {page === 'Paramètres' && <section className="panel"><h3>Amicale</h3>{!admin && <p>Les paramètres sont modifiables par l’administrateur de l’amicale.</p>}<Form disabled={!admin} key={`${profile.amicale.identifiant}-${profile.amicale.nom}-${profile.amicale.campagne}`} submit={async d => { const p = await api<Profile>('/parametres', 'PATCH', { nom: text(d, 'nom'), identifiant: text(d, 'identifiant'), departement: text(d, 'departement'), campagne: integer(d, 'campagne') }); onProfile(p); setYear(p.amicale.campagne); reload(); }}>
@@ -109,8 +110,12 @@ function Workspace({ profile, onProfile, onLogout }: { profile: Profile; onProfi
       <Field label="Secteur"><select name="secteurId" required>{data.sectors.map(s => <option key={s.id} value={s.id}>{s.nom}</option>)}</select></Field>
       {modal === 'Adresses' ? <><Field label="Numéro et voie"><input name="ligne1" required maxLength={180} /></Field><Field label="Code postal"><input name="codePostal" required maxLength={10} /></Field><Field label="Ville"><input name="ville" required maxLength={120} /></Field></> : <><Field label="Nom de la tournée"><input name="nom" required maxLength={140} /></Field><Field label="Date de début"><input type="date" name="dateDebut" required /></Field><Field label="Stock de calendriers"><input name="stockCalendriers" type="number" min={0} max={100000} defaultValue={0} required /></Field></>}
     </Form>)}
-    {modal === 'Sapeurs' && <Form onSuccess={done} submit={d => api('/sapeurs', 'POST', { email: text(d, 'email'), password: text(d, 'password'), role: text(d, 'role') })}><Field label="Adresse e-mail"><input type="email" name="email" required maxLength={180} autoComplete="off" /></Field><Field label="Mot de passe initial"><input type="password" name="password" required minLength={12} maxLength={256} autoComplete="new-password" /></Field><Field label="Rôle"><select name="role"><option value="ROLE_SAPEUR">Sapeur</option><option value="ROLE_RESPONSABLE">Responsable</option><option value="ROLE_ADMIN_AMICALE">Administrateur</option></select></Field></Form>}
+    {modal === 'Sapeurs' && <Form onSuccess={done} submit={d => api('/sapeurs', 'POST', { nom: text(d, 'nom'), email: text(d, 'email'), password: text(d, 'password'), role: text(d, 'role') })}><Field label="Nom"><input name="nom" required maxLength={180} autoComplete="name" /></Field><Field label="Identifiant (adresse e-mail)"><input type="email" name="email" required maxLength={180} autoComplete="off" /></Field><Field label="Mot de passe initial"><input type="password" name="password" required minLength={12} maxLength={256} autoComplete="new-password" /></Field><Field label="Rôle"><select name="role"><option value="ROLE_SAPEUR">Sapeur</option><option value="ROLE_RESPONSABLE">Responsable</option><option value="ROLE_ADMIN_AMICALE">Administrateur</option></select></Field></Form>}
   </Modal>}
+  {editingMember && <Modal title="Modifier le nom du sapeur" onClose={() => setEditingMember(null)}><Form submit={async d => {
+    const saved = await api<Member>(`/sapeurs/${editingMember.id}`, 'PATCH', { nom: text(d, 'nom') });
+    if (saved.id === profile.id) onProfile({ ...profile, nom: saved.nom });
+  }} onSuccess={() => { setEditingMember(null); reload(); }}><p>Identifiant : {editingMember.email}</p><Field label="Nom"><input name="nom" required maxLength={180} defaultValue={editingMember.nom ?? ''} autoComplete="name" autoFocus /></Field></Form></Modal>}
   </div>;
 }
 
@@ -125,5 +130,5 @@ function SimpleTable({ columns, rows }: { columns: string[]; rows: ReactNode[][]
 }
 function TourTable({ tours, onSelect, onDeleted }: { tours: Tour[]; onSelect: (id: string) => void; onDeleted?: () => void }) {
   if (!tours.length) return <p className="empty">Aucune tournée enregistrée pour cette sélection.</p>;
-  return <div className="table-wrap"><table><thead><tr><th>Tournée</th><th>Secteur</th><th>Date</th><th>Équipe</th><th>Calendriers vendus ou donnés</th><th>Adresses à visiter</th><th>Statut</th>{onDeleted && <th>Action</th>}</tr></thead><tbody>{tours.map(t => <tr key={t.id}><td><button className="link" onClick={() => onSelect(t.id)}>{t.nom}</button></td><td>{t.secteur}</td><td>{date(t.dateDebut)}</td><td>{t.equipe.map(u => u.email).join(', ') || 'Non affectée'}</td><td><ProgressCount value={t.calendriersDistribues} total={t.stockCalendriers} label="Calendriers vendus ou donnés" /><small>{t.calendriersVendus} vendus · {t.calendriersDonnes} donnés</small></td><td><ProgressCount value={t.adressesAVisiter} total={t.adresses} label="Adresses à visiter" addresses /><small>{t.traitees} déjà renseignées</small></td><td><span className={`pill ${t.statut.toLowerCase()}`}>{labels[t.statut]}</span></td>{onDeleted && <td><DeleteButton path={`/tournees/${t.id}`} name={t.nom} onDeleted={onDeleted} /></td>}</tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table><thead><tr><th>Tournée</th><th>Secteur</th><th>Date</th><th>Équipe</th><th>Calendriers vendus ou donnés</th><th>Adresses à visiter</th><th>Statut</th>{onDeleted && <th>Action</th>}</tr></thead><tbody>{tours.map(t => <tr key={t.id}><td><button className="link" onClick={() => onSelect(t.id)}>{t.nom}</button></td><td>{t.secteur}</td><td>{date(t.dateDebut)}</td><td>{t.equipe.map(memberName).join(', ') || 'Non affectée'}</td><td><ProgressCount value={t.calendriersDistribues} total={t.stockCalendriers} label="Calendriers vendus ou donnés" /><small>{t.calendriersVendus} vendus · {t.calendriersDonnes} donnés</small></td><td><ProgressCount value={t.adressesAVisiter} total={t.adresses} label="Adresses à visiter" addresses /><small>{t.traitees} déjà renseignées</small></td><td><span className={`pill ${t.statut.toLowerCase()}`}>{labels[t.statut]}</span></td>{onDeleted && <td><DeleteButton path={`/tournees/${t.id}`} name={t.nom} onDeleted={onDeleted} /></td>}</tr>)}</tbody></table></div>;
 }

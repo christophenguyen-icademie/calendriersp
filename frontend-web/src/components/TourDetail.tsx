@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, date, labels, money, type Address, type Book, type Member, type Tour } from '../api';
+import { api, date, labels, money, memberName, type Address, type Book, type Member, type Tour } from '../api';
 import { Field, Form, Modal, integer, text } from './Form';
 import { Carnets } from './Carnets';
 import { DeleteButton } from './DeleteButton';
@@ -27,8 +27,8 @@ export function TourDetail({ id, members, canManage, onBack, onChange }: { id: s
   const changed = () => { setRefresh(n => n + 1); onChange(); };
   const locked = tour?.statut === 'VALIDEE';
   return <><button className="secondary" onClick={onBack}>← Retour aux tournées</button>{error ? <p className="error" role="alert">{error} <button onClick={() => setRefresh(n => n + 1)}>Réessayer</button></p> : !tour ? <p role="status" className="empty">Chargement de la tournée…</p> : <>
-    <section className="panel tour-summary"><div className="panel-head"><h2>{tour.nom}</h2>{canManage && <DeleteButton path={`/tournees/${id}`} name={tour.nom} onDeleted={() => { onBack(); onChange(); }} />}</div><p>{tour.secteur} · {date(tour.dateDebut)} · <b>{labels[tour.statut]}</b></p><section className="stats tour-stats"><ActivityCards metrics={tour} /></section><p>{money(tour.montant)} encaissés</p><p>Équipe : {tour.equipe.map(u => u.email).join(', ') || 'Aucun sapeur affecté'}</p>
-      {canManage && tour.equipe.length > 0 && <ul className="team-list">{tour.equipe.map(u => <li key={u.id}>{u.email}<DeleteButton path={`/tournees/${id}/affectations/${u.id}`} name={`Affectation de ${u.email}`} label="Retirer de l’équipe" onDeleted={changed} /></li>)}</ul>}
+    <section className="panel tour-summary"><div className="panel-head"><h2>{tour.nom}</h2>{canManage && <DeleteButton path={`/tournees/${id}`} name={tour.nom} onDeleted={() => { onBack(); onChange(); }} />}</div><p>{tour.secteur} · {date(tour.dateDebut)} · <b>{labels[tour.statut]}</b></p><section className="stats tour-stats"><ActivityCards metrics={tour} /></section><p>{money(tour.montant)} encaissés</p><p>Équipe : {tour.equipe.map(memberName).join(', ') || 'Aucun sapeur affecté'}</p>
+      {canManage && tour.equipe.length > 0 && <ul className="team-list">{tour.equipe.map(u => <li key={u.id}>{memberName(u)}<DeleteButton path={`/tournees/${id}/affectations/${u.id}`} name={`Affectation de ${memberName(u)}`} label="Retirer de l’équipe" onDeleted={changed} /></li>)}</ul>}
       {locked && <p className="notice">Cette tournée a été validée. Les saisies sont verrouillées.</p>}
       {canManage && !locked && <div className="bottom-grid"><Form label="Modifier le statut" onSuccess={changed} submit={d => api(`/tournees/${id}/statut`, 'PATCH', { statut: text(d, 'statut') })}><Field label="Statut"><select name="statut" defaultValue={tour.statut}>{['PREPAREE', 'EN_COURS', 'TERMINEE'].map(s => <option value={s} key={s}>{labels[s]}</option>)}</select></Field></Form>
         <TeamForm tour={tour} members={members} onSaved={changed} /></div>}
@@ -49,7 +49,7 @@ function TeamForm({ tour, members, onSaved }: { tour: Tour; members: Member[]; o
     <h3>Ajouter des sapeurs à l’équipe</h3>
     {available.length === 0 ? <p>Aucun autre sapeur actif disponible dans votre amicale.</p> : <>
       <p className="map-help">Cochez les sapeurs qui participeront à cette tournée.</p>
-      <div className="team-options" role="group" aria-label="Sapeurs à ajouter à l’équipe">{available.map(u => <label className="team-option" key={u.id}><input type="checkbox" name="userIds" value={u.id} checked={selectedIds.includes(u.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, u.id] : ids.filter(id => id !== u.id))} /><span>{u.email}</span></label>)}</div>
+      <div className="team-options" role="group" aria-label="Sapeurs à ajouter à l’équipe">{available.map(u => <label className="team-option" key={u.id}><input type="checkbox" name="userIds" value={u.id} checked={selectedIds.includes(u.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids, u.id] : ids.filter(id => id !== u.id))} /><span>{memberName(u)}</span></label>)}</div>
       <p role="status">{selectedIds.length} sapeur{selectedIds.length > 1 ? 's' : ''} sélectionné{selectedIds.length > 1 ? 's' : ''}</p>
     </>}
   </Form>;

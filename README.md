@@ -14,6 +14,12 @@ Le web utilise exclusivement les données de l’API : connexion, secteurs, adre
 
 Le module mobile est intégré dans l’onglet **Calendriers** de MobileSP et utilise l’API pour l’authentification, les tournées, les adresses, les passages et les reçus. Une connexion réseau est nécessaire ; la synchronisation offline reste à implémenter. Les travaux restant avant exposition en production sont suivis dans `docs/PRODUCTION_CHECKLIST.md`.
 
+## Installation sur un VPS
+
+Le [guide VPS OVH](docs/VPS_OVH.md) décrit l'installation sur un serveur Ubuntu : Docker, PostgreSQL, CalendrierSP, MobileSP web, HTTPS, reprise des données, sauvegardes et services cartographiques facultatifs. Si Nginx est déjà installé, suivre la [publication MobileSP avec Nginx](docs/MOBILESP_NGINX.md).
+
+La [configuration Nginx pour mobilesp10.fr](docs/NGINX_MOBILESP10.md) sépare MobileSP, l'administration `amicale-calendriers.mobilesp10.fr` et l'API `api-calendriers.mobilesp10.fr`, avec proxy vers les conteneurs Docker.
+
 ## Démarrage avec Docker
 Docker et Docker Compose v2 suffisent pour le backend et le web. Depuis ce dossier :
 
@@ -48,9 +54,15 @@ Les résultats de passage proposés sont **Vente**, **Don**, **Refus**, **Absent
 
 Le tableau de bord, le récapitulatif de campagne et le détail d’une tournée affichent deux cartes : **Calendriers vendus ou donnés / stock de calendriers**, avec le détail des quantités vendues et des dons, et **Adresses à visiter / total des adresses**, avec le nombre déjà renseigné. Une vente compte sa quantité de calendriers ; un don compte un calendrier. Les tableaux des tournées affichent également les deux rapports. Les adresses à visiter sont celles sans passage ou avec le résultat **Non visitée** ; les autres résultats sont déjà renseignés. Les totaux d’une campagne additionnent les tournées de l’année : une même adresse présente dans deux tournées compte une fois pour chaque tournée. Un stock nul affiche **Stock à renseigner** ; les compteurs restent visibles sans division par zéro.
 
+### Sapeurs et équipes
+
+Dans **Sapeurs**, la création demande un **Nom** en plus de l’identifiant e-mail. **Modifier le nom**, réservé à l’administrateur, permet aussi de compléter les comptes existants. L’équipe des tournées et les choix d’affectation affichent ce nom sur le front web et dans MobileSP. Tant qu’un compte ancien n’a pas de nom, son e-mail reste affiché. La migration `Version20261113120000` ajoute le champ sans modifier les identifiants, mots de passe, affectations ou passages existants.
+
 ### Saisie et recherche dans une tournée
 
-Une vente accepte les paiements **Espèces**, **Chèque**, **CB** ou **Autre**. Le tableau affiche les résultats en vert pour une vente ou un don, en rouge pour un refus, et en orange pour une absence ou une adresse à revoir ; le libellé reste visible. Les filtres par **rue**, **résultat** et **carnet** se combinent avec une recherche par **numéro exact de reçu**. Le tri par adresse (numéros dans l’ordre naturel), montant ou résultat est disponible dans les deux sens, via les en-têtes ou les sélecteurs. Un compteur indique le nombre d’adresses affichées ; les filtres sont conservés après une saisie et peuvent être réinitialisés.
+Sur le front web et dans MobileSP, **Afficher les filtres et le tri** développe les contrôles, masqués par défaut. Les replier conserve la sélection et leur bouton indique le nombre de filtres actifs. Sur téléphone, le tableau du front s’affiche en fiches sans défilement horizontal. Les actions **Saisir / Modifier** et **＋ Appartement** utilisent des boutons courts ; dans MobileSP, ils sont regroupés sur une ligne qui revient à la ligne si nécessaire, sans répéter l’adresse dans le texte des boutons.
+
+Une vente accepte les paiements **Espèces**, **Chèque**, **CB** ou **Autre**. Le tableau affiche les résultats en vert pour une vente ou un don, en rouge pour un refus, et en orange pour une absence ou une adresse à revoir ; le libellé reste visible. Les filtres par **rue**, **résultat** et **carnet** se combinent avec une recherche par **numéro exact de reçu**. Le tri par adresse regroupe d’abord les **rues**, puis compare la **partie numérique du numéro** dans chaque rue : `2` précède `171`, et `3`, `3t` et `3 ter` ont la même valeur. Les numéros équivalents conservent leur ordre d’origine. Les tris par montant et résultat restent disponibles dans les deux sens, via les en-têtes ou les sélecteurs. Un compteur indique le nombre d’adresses affichées ; les filtres sont conservés après une saisie et peuvent être réinitialisés.
 
 Le formulaire de passage permet de compléter l’adresse avec **bâtiment, étage, appartement et porte**, affichés ensemble dans la cellule **Logement**. Ces précisions sont conservées sur l’adresse du secteur pour les prochaines tournées. Une adresse ayant un passage dans une tournée validée ne peut plus changer de logement, afin de préserver son historique.
 
@@ -178,6 +190,8 @@ docker compose -f compose.test.yml down
 Relancer les tests sur une base neuve en arrêtant cet environnement avec `down` avant un nouveau `up`. La base de développement et son volume ne sont pas utilisés par ces tests.
 
 Les contrôles d’identifiant couvrent la création interactive et par option, les limites de 4 et 20 caractères, la casse, les collisions, la migration des noms existants, le changement dans les paramètres et la conservation des sessions et des références. Le navigateur vérifie la connexion en majuscules et la modification persistante de l’identifiant.
+
+Les tests HTTP vérifient également le nom des sapeurs, sa modification par l’administrateur, sa présence dans les profils et les équipes web/mobile et l’isolation des amicales. Après `npm ci` dans `frontend-web`, `npm test` vérifie le tri par rue puis numéro, les suffixes et l’ordre stable des numéros identiques.
 
 ### Authentification web
 

@@ -979,6 +979,62 @@ class ApiTests(unittest.TestCase):
             with self.subTest(identifier=invalid):
                 Client().request("POST", "/login", {**account, "amicaleId": invalid}, status=401)
 
+    def test_sapeur_name_persists_in_profiles_and_web_and_mobile_teams(self):
+        email = 'named-worker@example.test'
+        password = 'Named-worker-password-123!'
+        member = self.a.request('POST', '/sapeurs', {'nom': '  Élodie Martin  ', 'email': email,
+            'password': password, 'role': 'ROLE_SAPEUR'}, 201)
+        self.assertEqual('Élodie Martin', member['nom'])
+        self.assertEqual(email, member['email'])
+        tour = self.make_tour(self.a, self.sector_a, 'Équipe avec noms', 2083)
+        assigned = self.a.request('POST', f'/tournees/{tour["id"]}/affectations', {'userId': member['id']})
+        self.assertEqual('Élodie Martin', assigned['equipe'][0]['nom'])
+        renamed = self.a.request('PATCH', f'/sapeurs/{member["id"]}', {'nom': '  Élodie Durand  '})
+        self.assertEqual(member['id'], renamed['id'])
+        self.assertEqual(email, renamed['email'])
+        self.assertEqual('Élodie Durand', renamed['nom'])
+        worker = Client()
+        profile = worker.login({'amicaleId': self.accounts['A']['amicaleId'], 'email': email, 'password': password})
+        self.assertEqual('Élodie Durand', profile['nom'])
+        self.assertEqual('Élodie Durand', worker.request('GET', '/session')['user']['nom'])
+        for path in [f'/tournees/{tour["id"]}', f'/mobile/tournees/{tour["id"]}/adresses']:
+            detail = worker.request('GET', path)
+            self.assertEqual('Élodie Durand', detail['equipe'][0]['nom'])
+            self.assertEqual(email, detail['equipe'][0]['email'])
+        listed = next(t for t in worker.request('GET', '/mobile/tournees') if t['id'] == tour['id'])
+        self.assertEqual('Élodie Durand', listed['equipe'][0]['nom'])
+        fresh = Client()
+        fresh.login(self.accounts['A'])
+        stored = next(u for u in fresh.request('GET', '/sapeurs') if u['id'] == member['id'])
+        self.assertEqual('Élodie Durand', stored['nom'])
+
+    def test_sapeur_name_validation_permissions_and_tenant_isolation(self):
+        legacy = self.a.request('POST', '/sapeurs', {'email': 'legacy-name@example.test',
+            'password': 'Legacy-password-123!', 'role': 'ROLE_SAPEUR'}, 201)
+        self.assertIsNone(legacy['nom'])
+        path = f'/sapeurs/{legacy["id"]}'
+        before = len(self.a.request('GET', '/sapeurs'))
+        for invalid in ['', '   ', None, 123, [], 'x' * 181]:
+            self.a.request('POST', '/sapeurs', {'nom': invalid, 'email': 'invalid-name@example.test',
+                'password': 'Invalid-password-123!', 'role': 'ROLE_SAPEUR'}, status=422)
+            self.a.request('PATCH', path, {'nom': invalid}, status=422)
+        self.assertEqual(before, len(self.a.request('GET', '/sapeurs')))
+        self.a.request('PATCH', path, {}, status=422)
+        self.a.request('PATCH', path, {'nom': 'Sans CSRF'}, status=403, csrf=False)
+        self.w.request('PATCH', path, {'nom': 'Interdit au sapeur'}, status=403)
+        self.b.request('PATCH', path, {'nom': 'Autre amicale'}, status=404)
+        manager_email = 'name-manager@example.test'
+        self.a.request('POST', '/sapeurs', {'nom': 'Responsable', 'email': manager_email,
+            'password': 'Manager-password-123!', 'role': 'ROLE_RESPONSABLE'}, 201)
+        manager = Client()
+        manager.login({'amicaleId': self.accounts['A']['amicaleId'], 'email': manager_email, 'password': 'Manager-password-123!'})
+        manager.request('PATCH', path, {'nom': 'Interdit au responsable'}, status=403)
+        self.assertIsNone(next(u for u in self.a.request('GET', '/sapeurs') if u['id'] == legacy['id'])['nom'])
+        saved = self.a.request('PATCH', path, {'nom': 'É' * 180})
+        self.assertEqual('É' * 180, saved['nom'])
+        self.assertEqual(legacy['email'], saved['email'])
+        self.assertEqual(legacy['roles'], saved['roles'])
+
     def test_mobile_passage_dates_are_persisted_preserved_and_validated(self):
         sector, address, tour, book = self.housing_workspace(2090)
         path = self.path(tour, address)
